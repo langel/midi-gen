@@ -1,0 +1,19 @@
+{
+  "name": "midi-gen",
+  "version": "1.0.0",
+  "description": "generating midi files like its nobodys budnezz",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/langel/midi-gen.git"
+  },
+  "author": "langel",
+  "license": "DBAD",
+  "bugs": {
+    "url": "https://github.com/langel/midi-gen/issues"
+  },
+  "homepage": "https://github.com/langel/midi-gen#readme"
+}
