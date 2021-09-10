@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/langel/midi-gen/issues"
   },
-  "homepage": "https://github.com/langel/midi-gen#readme"
+  "homepage": "https://github.com/langel/midi-gen#readme",
+  "dependencies": {
+    "scribbletune": "^4.1.1"
+  }
 }
