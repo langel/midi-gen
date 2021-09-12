@@ -17,6 +17,8 @@
   },
   "homepage": "https://github.com/langel/midi-gen#readme",
   "dependencies": {
+    "jsmidgen": "^0.1.5",
+    "midi-writer-js": "^2.0.1",
     "scribbletune": "^4.1.1"
   }
 }
