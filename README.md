@@ -13,8 +13,10 @@ built on jsmidgen and harmonics
 seems to be somewhere between scribbletune and jsmidgen
 built on tonal-midi
 
-### tonal-midi
-converts between midi int values and note name strings
+### tonaljs
+set of libraries designed to manipulate tonal element data
+example: tonal-midi converts between midi int values and note name strings
+chord-detect can analyze and interpret chords from an array of note names
 
 ### harmonics
 scales and chords arrays generated from string names
