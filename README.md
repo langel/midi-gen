@@ -25,3 +25,6 @@ lacks inversions/voicings
 ### jsmidigen
 probably our tool of choice
 most direct control of output
+
+### vexflow
+html5 canvas rendering of staff and tab
