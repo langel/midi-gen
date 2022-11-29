@@ -1,8 +1,18 @@
+const moar = (process.argv[2]);
+if (moar) console.log('moar addeded');
+
 var fs = require('fs');
 var midi = require('jsmidgen');
 
 let file = new midi.File();
+let filename = 'output/guntner_ingame' + ((moar)?'_moar':'') + '.mid';
+console.log(filename);
 
+let guit, keys;
+if (moar) {
+	keys = file.addTrack().instrument(1, 90);
+	guit = file.addTrack().instrument(2, 27);
+}
 // 34 is pizzi bass
 let bass = file.addTrack().instrument(0, 34);
 let perc = file.addTrack().instrument(9, 0); 
@@ -13,6 +23,7 @@ let pattern_root = 0;
 let pattern_pos = 0;
 let pattern_frame = 0;
 let bass_rest = 0;
+let guit_rest = 0;
 let perc_rest = 0;
 
 const root_tone = 33; // 2a03 lowest note in midi
@@ -98,8 +109,10 @@ const songs = {
 		if (pattern_pos % 12 == 0) {
 			pattern_root = progression[pattern_frame % 24];
 			pattern_frame++;
+			// keys
+			if (moar) keys.addChord(1, [pattern_root + 12, pattern_root + 19, pattern_root + 24], 384, 50);
 		}
-		// triangle
+		// bass
 		let tri = (pattern_pos ^ rng1) & 7;
 		if (tri) {
 			tri = pattern_root - 12;
@@ -107,10 +120,25 @@ const songs = {
 			let temp = tri;
 			//tri += root_tone;
 			//console.log(temp + ' ' + tri);
-			bass.addNote(0, tri, 32, bass_rest, 90);
+			bass.addNote(0, tri, 32, bass_rest, 70);
 			bass_rest = 0;
 		}
 		else bass_rest += 32;
+		// guitar
+		if (moar) {
+			if (((rng0 & 1) == 0) && ((rng1 & 1) == 0)) {
+				let guit_tone = octoscale[(rng0 & 0x7)] + pattern_root;
+				guit.addChord(2, [guit_tone + 12, guit_tone + 19], 32, 33);
+				guit_rest = 0;
+			}
+			else if ([0,6].includes(pattern_pos % 12)) {
+				guit.addNote(2, pattern_root, 32, 0, 50);
+			}
+			else if ([3,4,9,10].includes(pattern_pos % 12)) {
+				guit.addNote(2, pattern_root + 12, 32, 0, 33);
+			}
+			else guit.addNoteOff(2, pattern_root, 32, 50);
+		}
 		// percussion
 		let perc_next = 0;
 		let perc_vol = 127;
@@ -158,4 +186,4 @@ for (let i = 0; i < frame_end; i++ ) {
 	global_counter++;
 }
 
-fs.writeFileSync('output/guntner_ingame.mid', file.toBytes(), 'binary');
+fs.writeFileSync(filename, file.toBytes(), 'binary');
