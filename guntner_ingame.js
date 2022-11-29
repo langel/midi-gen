@@ -5,13 +5,15 @@ let file = new midi.File();
 
 // 34 is pizzi bass
 let bass = file.addTrack().instrument(0, 34);
+let perc = file.addTrack().instrument(9, 0); 
 
 // nes engine variables
 let global_counter = 0;
 let pattern_root = 0;
 let pattern_pos = 0;
 let pattern_frame = 0;
-let pattern_rest = 0;
+let bass_rest = 0;
+let perc_rest = 0;
 
 const root_tone = 33; // 2a03 lowest note in midi
 
@@ -105,13 +107,39 @@ const songs = {
 			let temp = tri;
 			//tri += root_tone;
 			//console.log(temp + ' ' + tri);
-			bass.addNote(0, tri, 32, pattern_rest, 90);
-			pattern_rest = 0;
+			bass.addNote(0, tri, 32, bass_rest, 90);
+			bass_rest = 0;
 		}
-		else pattern_rest += 32;
-		// kick
+		else bass_rest += 32;
+		// percussion
+		let perc_next = 0;
+		let perc_vol = 127;
 		// hat
+		if (rng0 & 0x06) {
+			perc_next = 42;
+			perc_vol = 80 + (rng1 >> 5);
+		}
+		// ghost snare
+		if (!(rng1 & 0x0c)) {
+			perc_next = 37;
+			perc_vol = 64 + (rng0 >> 4);
+		}
 		// snare
+		if (pattern_pos % 12 == 6) {
+			perc_next = 38;
+			perc_vol = (rng0 % 16) + 111;
+		}
+		// kick
+		if (pattern_pos % 12 == 0) {
+			perc_next = 36;
+			perc_vol = 127;
+		}
+			
+		if (perc_next) {
+			perc.addNote(9, perc_next, 32, perc_rest, perc_vol);
+			perc_rest = 0;
+		}
+		else perc_rest += 32;
 		// next tic
 		pattern_pos++;
 		//pattern_root = octoscale[rng0 & 7];
@@ -119,7 +147,9 @@ const songs = {
 }
 
 rng_reset();
-pattern_frame = 12;
+bass.setTempo(120, 0);
+bass.events.push(new midi.MetaEvent({type: midi.MetaEvent.TIME_SIG, data: [6, 3, 24, 8] }));
+pattern_frame = 0;
 let frame_end = 5000;
 for (let i = 0; i < frame_end; i++ ) {
 	rng0 = rng_next(rng0);
