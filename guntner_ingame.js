@@ -7,14 +7,19 @@ var midi = require('jsmidgen');
 let file, filename;
 let perc, bass;
 let guit, keys;
+let pul1, pul2;
 
 // nes engine variables
 let global_counter = 0;
 let pattern_root = 0;
 let pattern_pos = 0;
+let pattern_num = 0;
 let pattern_frame = 0;
+let bass_note = 0;
 let bass_rest = 0;
+let bass_time = 0;
 let guit_rest = 0;
+let keys_rest = 0;
 let perc_rest = 0;
 
 const root_tone = 33; // 2a03 lowest note in midi
@@ -211,15 +216,125 @@ const songs = {
 	3: {
 		title: 'boss intro',
 		frame_len: 5000,
+		init: () => {
+			pattern_pos = 0;
+			pattern_root = 0;
+			keys = file.addTrack().instrument(1, 1);
+			bass = file.addTrack().instrument(0, 34);
+//			pul1 = file.addTrack().instrument(2, 1);
+//			pul2 = file.addTrack().instrument(3, 1);
+			bass.setTempo(150, 0);
+		},
 		process: () => {
+			if (global_counter % 8) return;
+			if (pattern_pos >= 8) return;
+			pattern_pos++;
+			pattern_root++;
+			var apu_temp = pattern_root + 4;
+			console.log(apu_temp);
+			var pulse1 = octoscale[apu_temp] + 12 + root_tone;
+			var pulse2 = apu_temp + 12 + 15 + root_tone;
+			console.log('pu2 ' + pulse2);
+			var length = 64;
+			if (pattern_pos == 8) length = 256;
+			bass.addNote(0, pulse2 - 24, length);
+//			pul1.addNote(0, pulse1, length);
+//			pul2.addNote(0, pulse2, length);
+			keys.addChord(1, [pulse1, pulse2], length);
+//			keys.addNoteOff(1, pulse1, length);
+			// XXX how do you do pitched noise in midi?
 		},
 	},
+
 	4: {
 		title: 'boss fight',
 		frame_len: 5000,
 		pitches: [12,0,17,0,0,12,12,0,17,0,0,15,0,0,13,0,0,12],
 		lengths: [18,0,10,0,0, 3,18,0,10,0,0, 8,0,0, 8,0,0, 3],
+		pitches2: [12,17, 0,12,12,17, 0,15, 0,13, 0,12],
+		lengths2: [64,64,32,32,64,64,64,64,32,64,32,32],
+		lengths3: [ 2, 2, 1, 1, 2, 2, 2, 2, 1, 2, 1, 1],
+		init: () => {
+			keys = file.addTrack().instrument(1, 1);
+			bass = file.addTrack().instrument(0, 34);
+			bass_rest = 0;
+			bass_time = 0;
+			bass_note = 0;
+			perc = file.addTrack().instrument(9, 0); 
+			// main settings
+			bass.setTempo(120, 0);
+//			bass.events.push(new midi.MetaEvent({type: midi.MetaEvent.TIME_SIG, data: [13, 4, 24, 8] }));
+			bass.setTimesig(19, 4, 0);
+			pattern_frame = pattern_num = pattern_pos = 0;
+		},
 		process: () => {
+			if (global_counter % 5) return;
+			pattern_pos++;
+			if (pattern_pos == 19) {
+				//next loop / adjust root
+				if (pattern_num & 4) {
+					pattern_root--;
+				}
+				else pattern_root++;
+				pattern_pos = 0;
+				pattern_num++;			
+			}
+			// pulse 1 anti melody
+			let temp = (apu_rng1 >> 1) & 8;
+			pul1 = (temp) ? (apu_rng0 & 0x07) : temp;
+			keys.addNote(1, pul1 + 24 + pattern_root + root_tone, 32);
+			// bass
+			if (bass_time == 0) {
+				var note = songs[4]['pitches2'][pattern_frame];
+				var leng = songs[4]['lengths2'][pattern_frame];
+				//bass.addNoteOff(0, bass_note, leng);
+				if (note != 0) {
+					bass.addNote(0, note + root_tone, leng, bass_rest);
+					bass_rest = 0;
+				}
+				else bass_rest = leng;
+				pattern_frame++;
+				pattern_frame %= songs[4]['lengths3'].length;
+				bass_time = songs[4]['lengths3'][pattern_frame];
+			}
+			bass_time--;
+			/*
+			if (bass_rest >= songs[4]['lengths2'][pattern_frame]) {
+				var note = songs[4]['pitches2'][pattern_frame];
+				if (note == 0 && bass_note != 0) {
+					bass.addNoteOff(0, bass_note, bass_rest);
+				}
+				bass_note = note;
+				if (note != 0) {
+					bass.addNoteOn(0, note + root_tone, bass_rest);
+					// hats in unison with bass
+				}
+				if ((apu_rng0 & 0x0c) == 0) {
+					// note is staccato
+				}
+				bass_rest = 0;
+				pattern_frame++;
+			}
+			bass_rest += 32;
+			*/
+			// percussion
+			let perc_next = 0;
+			let perc_vol = 127;
+			// kick
+			if (pattern_pos == 0) {
+				perc_next = 36;
+				perc_vol = 127;
+			}
+			// snare
+			if (pattern_pos == 10) {
+				perc_next = 38;
+				perc_vol = (apu_rng0 % 16) + 111;
+			}
+			if (perc_next) {
+				perc.addNote(9, perc_next, 32, perc_rest, perc_vol);
+				perc_rest = 0;
+			}
+			else perc_rest += 32;
 		},
 	},
 	5: {
