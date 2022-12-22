@@ -21,6 +21,7 @@ let bass_time = 0;
 let guit_rest = 0;
 let keys_rest = 0;
 let perc_rest = 0;
+let hat_time = 0;
 
 const root_tone = 33; // 2a03 lowest note in midi
 
@@ -101,31 +102,91 @@ const progression = [
 	51, 48, 48, 51, 52, 47, 50, 45, 
 ];
 
+const rng_chord = () => {
+	var notes = [];
+	// pulse 1
+	notes.push(root_tone + (rng0 & 0x0f) + 16 + 24);
+	// pulse 2
+	notes.push(root_tone + (rng1 & 0x0f) + 8 + 24);
+	// triangle
+	notes.push(root_tone + (rng2 & 0x0f) + 8 - 12);
+	return notes;
+};
+
+const song_main_init = () => {
+	keys = file.addTrack().instrument(1, 80);
+	guit = file.addTrack().instrument(2, 80);
+	bass = file.addTrack().instrument(0, 81);
+	bass.setTempo(120, 0);
+	keys_rest = guit_rest = 0;
+}
+const song_main_load_note = (note, scale) => {
+	if (scale) return majpentscale[note];
+	else return octoscale[note];
+}
+const song_main_process = (scale = 0) => {
+	pattern_frame += 0x11;
+	if (pattern_frame <= 0xff) return;
+	pattern_frame = 0x0a;
+	if (pattern_pos == 0) {
+		pattern_pos = 8;
+		pattern_root = song_main_load_note(apu_rng1 & 0x7, scale);
+	}
+	// bass
+	bass_note = pattern_root + 0x18 + root_tone - 12;
+	bass.addNote(0, bass_note, 64);
+	// keys / pulse 1
+	if ((apu_rng1 & 0x01) == 0) {
+		keys_note = root_tone + 24;
+		keys_note += song_main_load_note((apu_rng0 & 0x07) + pattern_root, scale);
+		keys.addNote(1, keys_note, 64, keys_rest);
+		keys_rest = 0;
+	}
+	else keys_rest += 64;
+	// guit / pulse 2
+	if ((apu_rng1 & 0x04 & pattern_pos) != 0) {
+		guit_note = root_tone + 36;
+		guit_note += song_main_load_note(pattern_root, scale);
+		guit.addNote(2, guit_note, 64, guit_rest, 20);
+		guit_rest = 0;
+	}
+	else guit_rest += 64;
+	// iterator
+	pattern_pos--;
+}
+
 const songs = {
 	0: {
 		title: 'rng chord',
 		frame_len: 500,
 		init: () => {
-			keys = file.addTrack().instrument(1, 1);
-			bass = file.addTrack().instrument(0, 37);
+			keys = file.addTrack().instrument(1, 80);
+			guit = file.addTrack().instrument(2, 80);
+			bass = file.addTrack().instrument(0, 81);
 			// main settings
 			bass.setTempo(120, 0);
 		},
 		process: () => {
 			if (global_counter) return;
-			// XXX uses global apu_rng not apu_rng
-			let pulse1 = root_tone + (rng0 & 0x0f) + 16 + 24;
-			let pulse2 = root_tone + (rng1 & 0x0f) + 8 + 24;
-			keys.addChord(1, [pulse1, pulse2], 512);
-			keys.addNoteOff(1, pulse1, 512);
-			let triang = root_tone + (rng2 & 0x0f) + 8 - 12;
-			bass.addNote(0, triang, 512);
+			let notes = rng_chord();
+			keys.addNote(1, notes[0], 512);
+			guit.addNote(2, notes[1], 512);
+			bass.addNote(0, notes[2], 512);
 		},
 	},
 	1: {
 		title: 'sick dingle',
 		frame_len: 5000,
+		init: () => {
+			song_main_init();
+			pattern_frame_ = 0x70;
+			pattern_pos = 0x04;
+			pattern_root = 0x02;
+			apu_rng1 = 0x30;
+			apu_rng0 = 0x44;
+		},
 		process: () => {
+			song_main_process();
 		},
 	},
 	2: {
@@ -138,10 +199,15 @@ const songs = {
 			}
 			// 34 is pizzi bass
 			bass = file.addTrack().instrument(0, 34);
+			bass_rest = 0;
+			guit_rest = 0;
+			keys_rest = 0;
 			perc = file.addTrack().instrument(9, 0); 
 			// main settings
 			bass.setTempo(120, 0);
 			bass.events.push(new midi.MetaEvent({type: midi.MetaEvent.TIME_SIG, data: [6, 3, 24, 8] }));
+			pattern_frame = 0;
+			pattern_pos = 0;
 		},
 		process: () => {
 			if (global_counter % 8) return;
@@ -150,7 +216,7 @@ const songs = {
 				pattern_root = progression[pattern_frame % 24];
 				pattern_frame++;
 				// keys
-				if (moar) keys.addChord(1, [pattern_root + 12, pattern_root + 19, pattern_root + 24], 384, 50);
+				if (moar) keys.addChord(1, [pattern_root + 12, pattern_root + 19, pattern_root + 24], 384, 0, 50);
 			}
 			// bass
 			let tri = (pattern_pos ^ apu_rng1) & 7;
@@ -168,7 +234,7 @@ const songs = {
 			if (moar) {
 				if (((apu_rng0 & 1) == 0) && ((apu_rng1 & 1) == 0)) {
 					let guit_tone = octoscale[(apu_rng0 & 0x7)] + pattern_root;
-					guit.addChord(2, [guit_tone + 12, guit_tone + 19], 32, 33);
+					guit.addChord(2, [guit_tone + 12, guit_tone + 19], 32, 0, 33);
 					guit_rest = 0;
 				}
 				else if ([0,6].includes(pattern_pos % 12)) {
@@ -231,10 +297,8 @@ const songs = {
 			pattern_pos++;
 			pattern_root++;
 			var apu_temp = pattern_root + 4;
-			console.log(apu_temp);
 			var pulse1 = octoscale[apu_temp] + 12 + root_tone;
 			var pulse2 = apu_temp + 12 + 15 + root_tone;
-			console.log('pu2 ' + pulse2);
 			var length = 64;
 			if (pattern_pos == 8) length = 256;
 			bass.addNote(0, pulse2 - 24, length);
@@ -261,16 +325,17 @@ const songs = {
 			bass_time = 0;
 			bass_note = 0;
 			perc = file.addTrack().instrument(9, 0); 
+			perc_rest = 0;
+			hat_time = 0;
 			// main settings
-			bass.setTempo(120, 0);
+			bass.setTempo(180, 0);
 //			bass.events.push(new midi.MetaEvent({type: midi.MetaEvent.TIME_SIG, data: [13, 4, 24, 8] }));
 			bass.setTimesig(19, 4, 0);
 			pattern_frame = pattern_num = pattern_pos = 0;
 		},
 		process: () => {
 			if (global_counter % 5) return;
-			pattern_pos++;
-			if (pattern_pos == 19) {
+			if (pattern_pos >= 19) {
 				//next loop / adjust root
 				if (pattern_num & 4) {
 					pattern_root--;
@@ -280,17 +345,29 @@ const songs = {
 				pattern_num++;			
 			}
 			// pulse 1 anti melody
-			let temp = (apu_rng1 >> 1) & 8;
-			pul1 = (temp) ? (apu_rng0 & 0x07) : temp;
-			keys.addNote(1, pul1 + 24 + pattern_root + root_tone, 32);
+			pul1 = (apu_rng1 >> 1) & 8;
+			pul1 = (pul1) ? pul1 : (apu_rng0 & 0x07)*2;
+			keys.addNote(1, pul1 + 36 + pattern_root + root_tone, 32, 0, 75);
 			// bass
 			if (bass_time == 0) {
 				var note = songs[4]['pitches2'][pattern_frame];
 				var leng = songs[4]['lengths2'][pattern_frame];
 				//bass.addNoteOff(0, bass_note, leng);
 				if (note != 0) {
-					bass.addNote(0, note + root_tone, leng, bass_rest);
-					bass_rest = 0;
+					// bass make hat go
+					hat_time = 0 + bass_rest / 32;
+					// make bass go
+					/* staccato hella bork dtho
+					// staccato tho?
+					if ((apu_rng0 & 0x0c) == 0) {
+						bass.addNote(0, note + root_tone - 12, 24, bass_rest);
+						bass_rest = leng - 24;
+					}
+					else {
+					*/
+						bass.addNote(0, note + root_tone - 12, leng, bass_rest);
+						bass_rest = 0;
+					//}
 				}
 				else bass_rest = leng;
 				pattern_frame++;
@@ -298,67 +375,108 @@ const songs = {
 				bass_time = songs[4]['lengths3'][pattern_frame];
 			}
 			bass_time--;
-			/*
-			if (bass_rest >= songs[4]['lengths2'][pattern_frame]) {
-				var note = songs[4]['pitches2'][pattern_frame];
-				if (note == 0 && bass_note != 0) {
-					bass.addNoteOff(0, bass_note, bass_rest);
-				}
-				bass_note = note;
-				if (note != 0) {
-					bass.addNoteOn(0, note + root_tone, bass_rest);
-					// hats in unison with bass
-				}
-				if ((apu_rng0 & 0x0c) == 0) {
-					// note is staccato
-				}
-				bass_rest = 0;
-				pattern_frame++;
-			}
-			bass_rest += 32;
-			*/
 			// percussion
-			let perc_next = 0;
-			let perc_vol = 127;
-			// kick
-			if (pattern_pos == 0) {
-				perc_next = 36;
-				perc_vol = 127;
+			let perc_chord = [];
+			let perc_vol = 90;
+			// hat
+			if (hat_time == 0) {
+				perc_chord.push(42);
+				perc_vol = (apu_rng1 % 32) + 64;
 			}
+			// kick
+			if (pattern_pos == 0) perc_chord.push(36);
 			// snare
 			if (pattern_pos == 10) {
-				perc_next = 38;
-				perc_vol = (apu_rng0 % 16) + 111;
+				perc_chord.push(38);
+				perc_vol = (apu_rng0 % 32) + 95;
 			}
-			if (perc_next) {
-				perc.addNote(9, perc_next, 32, perc_rest, perc_vol);
+			if (perc_chord.length) {
+				perc.addChord(9, perc_chord, 32, perc_rest, perc_vol);
 				perc_rest = 0;
 			}
 			else perc_rest += 32;
+			hat_time--;
+			pattern_pos++;
 		},
 	},
 	5: {
 		title: 'game over',
 		frame_len: 5000,
+		init: () => {
+			keys = file.addTrack().instrument(1, 80);
+			guit = file.addTrack().instrument(2, 80);
+			bass = file.addTrack().instrument(0, 81);
+			bass.setTempo(90, 0);
+			frame_counter = 0;
+			keys_rest = 0;
+		},
 		process: () => {
+			if (frame_counter > 0xff) return;
+			if ((frame_counter % 8) == 0) {
+				// XXX all notes bend downward
+				let len = 32;
+				let frames = [0x10, 0x30, 0x40, 0x70];
+				if (frames.includes(frame_counter)) {
+					let notes = rng_chord();
+					keys.addNote(1, notes[0], len, keys_rest);
+					guit.addNote(2, notes[1], len, keys_rest);
+					bass.addNote(0, notes[2] + 12, len, keys_rest);
+					keys_rest = 0;
+				}
+				else keys_rest += len;
+			}
+			frame_counter++;
 		},
 	},
 	6: {
 		title: 'ending bad',
 		frame_len: 5000,
+		init: () => {
+			keys = file.addTrack().instrument(1, 80);
+			guit = file.addTrack().instrument(2, 80);
+			bass = file.addTrack().instrument(0, 81);
+			frame_counter = 0;
+		},
 		process: () => {
+			let len = 4;
+			// XXX all notes bend down 
+			if ((frame_counter & 0x7d) == 0) {
+				let notes = rng_chord();
+				keys.addNote(1, notes[0], len, keys_rest);
+				guit.addNote(2, notes[1], len, keys_rest);
+				bass.addNote(0, notes[2] + 12, len, keys_rest);
+				keys_rest = 0;
+			}
+			else keys_rest += len;
+			frame_counter++;
 		},
 	},
 	7: {
 		title: 'ending ok',
 		frame_len: 5000,
+		init: () => {
+			song_main_init();
+			pattern_frame_ = 0;
+			pattern_pos = 0;
+			pattern_root = 0;
+		},
 		process: () => {
+			// XXX all notes bend down softly
+			//     (half as fast as other bender downerers)
+			song_main_process();
 		},
 	},
 	8: {
 		title: 'ending good',
 		frame_len: 5000,
+		init: () => {
+			song_main_init();
+			pattern_frame_ = 0;
+			pattern_pos = 0;
+			pattern_root = 0;
+		},
 		process: () => {
+			song_main_process(1);
 		},
 	},
 }
@@ -376,9 +494,9 @@ Object.keys(songs).forEach(song_id => {
 		rng0 = rng_next(rng0);
 		rng1 = rng_prev(rng1);
 		rng2 = rng_next(rng2);
+		song.process();
 		apu_rng0 = rng_next(apu_rng0);
 		apu_rng1 = rng_prev(apu_rng1);
-		song.process();
 		global_counter++;
 	}
 	fs.writeFileSync(filename, file.toBytes(), 'binary');

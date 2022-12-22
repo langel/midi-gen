@@ -2,6 +2,11 @@
 how many midi files can we make?!
 doing research on midi generation using node
 
+### jsmidgen patching
+doing musical rests with jsmidgen is hella wacky
+`track.addChord` is missing the `time` parameter that the `track.addNote` method has
+so i went ahead and changed it inside `node_modules`
+
 ## module research
 
 ### scribbletune
