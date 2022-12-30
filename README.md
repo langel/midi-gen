@@ -5,7 +5,9 @@ doing research on midi generation using node
 ### jsmidgen patching
 doing musical rests with jsmidgen is hella wacky
 `track.addChord` is missing the `time` parameter that the `track.addNote` method has
-so i went ahead and changed it inside `node_modules`
+`track.setTimesig` was also added
+`cp jsmidgen.js node_modules/jsmidgen/lib/jsmidgen.js`
+after doing the ye olde `npm install`
 
 ## module research
 
